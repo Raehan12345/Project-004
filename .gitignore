@@ -8,7 +8,6 @@ __pycache__/
 config.json
 stock_screen_results.csv
 *.xlsx
-tickers.txt
 
 # OS specific
 .DS_Store
