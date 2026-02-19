@@ -32,6 +32,8 @@ from analysis.drawdown import drawdown
 
 from quant.technical import get_technical_signals
 
+from analysis.volatility import get_volatility_multiplier
+
 TICKER_FILE = "tickers_30.txt"
 
 def load_tickers(file):
@@ -112,6 +114,8 @@ for ticker in tickers:
         tech_score = tech_data["tech_score"]
         tech_trend = tech_data["trend"]
         tech_rsi = tech_data["rsi"]
+
+        vol_multiplier = get_volatility_multiplier(ticker)
 
         #final
         total_score = quant_score * 1.5 + qual_score
@@ -246,6 +250,7 @@ for ticker in tickers:
             "TechScore": tech_score,
             "Trend": tech_trend,
             "RSI": tech_rsi,
+            "VolMultiplier": vol_multiplier,
         })
     except Exception as e:
         print(f"Error processing {ticker}: {e}")
@@ -264,7 +269,7 @@ df["PortfolioScore"] = (
 
 df["DividendTilt"] = df["DividendYield"].fillna(0).clip(upper=0.06)
 df["AdjPortfolioScore"] = (
-    df["PortfolioScore"] * (1 + df["DividendTilt"])
+    df["PortfolioScore"] * (1 + df["DividendTilt"]) * df["VolMultiplier"]
 )
 
 # NORMALISED CONVICTION SCORE
