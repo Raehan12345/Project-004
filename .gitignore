@@ -1,0 +1,15 @@
+# Python environment
+venv_scraper/
+__pycache__/
+*.py[cod]
+
+# Data & Sensitive Files
+.env
+config.json
+stock_screen_results.csv
+*.xlsx
+tickers.txt
+
+# OS specific
+.DS_Store
+Thumbs.db
