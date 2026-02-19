@@ -30,7 +30,7 @@ from analysis.backtest import run_backtest
 
 from analysis.drawdown import drawdown
 
-TICKER_FILE = "tickers.txt"
+TICKER_FILE = "tickers_30.txt"
 
 def load_tickers(file):
     with open(file) as f:
@@ -266,16 +266,17 @@ max_portfolio_score = (
 df["ConvictionPct"] = df["AdjPortfolioScore"] / max_portfolio_score
 df["ConvictionPct"] = df["ConvictionPct"].clip(0, 1)
 
-print(df[["Ticker", "AdjPortfolioScore", "ConvictionPct"]]
-      .sort_values("ConvictionPct", ascending=False)
-      .head(10))
-
 from analysis.liquidity import liquidity_cap
 
 df["LiquidityCap"] = df["AvgDailyValue"].apply(liquidity_cap)
 
 from analysis.portfolio import allocate_portfolio
 df["TargetWeight"] = allocate_portfolio(df)
+
+# In main.py, update the conviction printout
+print(df[["Ticker", "AdjPortfolioScore", "ConvictionPct", "TargetWeight"]]
+      .sort_values("ConvictionPct", ascending=False)
+      .head(10))
 
 for scenario in ["Rate Cut", "China Slowdown", "Energy Shock"]:
     df[f"{scenario}Impact"] = portfolio_scenario_impact(df, scenario)
@@ -623,5 +624,21 @@ with pd.ExcelWriter(excel_file, engine="xlsxwriter") as writer:
 
     bt_ws.insert_chart("A38", chart7)
 
+    # =========================
+    # CHART 8 — Portfolio Weights
+    # =========================
+    chart8 = workbook.add_chart({"type": "pie"})
+
+    t_col  = excel_col(col_idx["Ticker"])
+    w_col  = excel_col(col_idx["TargetWeight"])
+
+    chart8.add_series({
+        "name": "Portfolio Weights",
+        "categories": f"=Data!${t_col}$2:${t_col}${n}",
+        "values": f"=Data!${w_col}$2:${w_col}${n}",
+    })
+
+    chart8.set_title({"name": "Final Portfolio Allocation"})
+    dashboard_ws.insert_chart("Q74", chart8)
 
 print("Excel dashboard created successfully.")

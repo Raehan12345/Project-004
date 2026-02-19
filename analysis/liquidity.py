@@ -1,16 +1,29 @@
 # analysis/liquidity.py
 
 def liquidity_cap(avg_daily_value):
+    """
+    Calibrated liquidity caps for SGX Small/Mid-Cap profiles.
+    Thresholds converted to represent typical SGD turnover tiers.
+    """
     if avg_daily_value is None:
-        return 0.05  # conservative default
+        return 0.03  # More conservative default for unknown liquidity
 
-    if avg_daily_value >= 50_000_000:
+    # Tier 1: High Liquidity (Blue Chips / Large Mid-Caps)
+    if avg_daily_value >= 10_000_000:
         return 0.20
-    elif avg_daily_value >= 20_000_000:
-        return 0.15
-    elif avg_daily_value >= 10_000_000:
-        return 0.10
+    
+    # Tier 2: Standard Mid-Cap Liquidity
     elif avg_daily_value >= 5_000_000:
-        return 0.07
+        return 0.15
+    
+    # Tier 3: Lower Mid-Cap (Common for many SGX mid-caps)
+    elif avg_daily_value >= 1_000_000:
+        return 0.10
+    
+    # Tier 4: Small-Cap / Tight Liquidity
+    elif avg_daily_value >= 500_000:
+        return 0.06
+    
+    # Tier 5: Illiquid / Micro-Cap
     else:
-        return 0.04
+        return 0.02
