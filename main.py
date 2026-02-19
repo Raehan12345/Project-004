@@ -30,7 +30,7 @@ from analysis.backtest import run_backtest
 
 from analysis.drawdown import drawdown
 
-TICKER_FILE = "TiongWoon.txt"
+TICKER_FILE = "tickers.txt"
 
 def load_tickers(file):
     with open(file) as f:
@@ -158,27 +158,40 @@ for ticker in tickers:
         if not decision_rationale:
             decision_rationale.append("No clear upside drivers")
 
-        #decision logic
-        if cat_score >= 3 and quant_score >= 3 and val_score >= 0.6:
+        # UPGRADED DECISION MATRIX
+        
+        # 1. CORE CONVICTION (High Quant + High Qual)
+        if quant_score >= 4 and qual_score >= 2 and adj_val_score >= 0.5:
+            decision = "CORE LONG"
+            decision_rationale.append("High-conviction fundamental and qualitative alignment")
+
+        # 2. CATALYST PLAY (Momentum/News driven)
+        elif cat_score >= 3 and qual_score >= 2:
             decision = "CATALYST BUY"
+            decision_rationale.append("Material near-term catalyst with positive sentiment")
 
-        elif cat_score >= 2 and val_score >= 0.7:
-            decision = "VALUE + CATALYST"
+        # 3. CONTRARIAN / VALUE (Deep Value + Improving Qual)
+        elif adj_val_score >= 0.8 and qual_score >= 1:
+            decision = "VALUE ACCUMULATE"
+            decision_rationale.append("Deep value with early signs of qualitative turnaround")
 
-        elif adj_val_score >= 0.8 and quant_score >= 2:
-            decision = "DEEP VALUE"
-
-        elif quant_score >= 3:
+        # 4. QUALITY HOLD (Strong Quant but no news/expensive)
+        elif quant_score >= 4:
             decision = "QUALITY HOLD"
+            decision_rationale.append("Maintaining position on strong business fundamentals")
 
-        elif cat_score >= 2:
-            decision = "SPECULATIVE"
+        # 5. SPECIAL SITUATIONS
+        elif is_turnaround and (cat_score >= 2 or qual_score >= 1):
+            decision = "SPECULATIVE TURNAROUND"
+            decision_rationale.append("High-risk turnaround showing initial catalyst signs")
+
+        # 6. RISK/AVOID
+        elif qual_score <= -2 or (quant_score <= 1 and adj_val_score <= 0.3):
+            decision = "AVOID / EXIT"
+            decision_rationale.append("Material negative news or deteriorating fundamental/valuation profile")
 
         else:
-            decision = "AVOID"
-
-        if decision == "AVOID" and is_turnaround:
-            decision = "TURNAROUND / SPECULATIVE"
+            decision = "NEUTRAL / WATCH"
 
         print(f"\n{ticker} ({sector})")
         print("-" * 40)
