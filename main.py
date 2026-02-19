@@ -30,6 +30,8 @@ from analysis.backtest import run_backtest
 
 from analysis.drawdown import drawdown
 
+from quant.technical import get_technical_signals
+
 TICKER_FILE = "tickers_30.txt"
 
 def load_tickers(file):
@@ -105,6 +107,12 @@ for ticker in tickers:
                 print(f"LLM failed for {ticker}: {e}")
                 llm_summary = "LLM summary unavailable"
 
+        #technical overlay
+        tech_data = get_technical_signals(ticker)
+        tech_score = tech_data["tech_score"]
+        tech_trend = tech_data["trend"]
+        tech_rsi = tech_data["rsi"]
+
         #final
         total_score = quant_score * 1.5 + qual_score
 
@@ -158,22 +166,22 @@ for ticker in tickers:
         if not decision_rationale:
             decision_rationale.append("No clear upside drivers")
 
-        # UPGRADED DECISION MATRIX
+        # UPGRADED DECISION MATRIX WITH TECHNICAL OVERLAY
         
-        # 1. CORE CONVICTION (High Quant + High Qual)
-        if quant_score >= 4 and qual_score >= 2 and adj_val_score >= 0.5:
+        # 1. CORE CONVICTION (High Quant + High Qual + Bullish Trend)
+        if quant_score >= 4 and qual_score >= 2 and adj_val_score >= 0.5 and tech_score > 0:
             decision = "CORE LONG"
-            decision_rationale.append("High-conviction fundamental and qualitative alignment")
+            decision_rationale.append("High-conviction fundamental and qualitative alignment with bullish momentum")
 
         # 2. CATALYST PLAY (Momentum/News driven)
         elif cat_score >= 3 and qual_score >= 2:
             decision = "CATALYST BUY"
             decision_rationale.append("Material near-term catalyst with positive sentiment")
 
-        # 3. CONTRARIAN / VALUE (Deep Value + Improving Qual)
-        elif adj_val_score >= 0.8 and qual_score >= 1:
+        # 3. CONTRARIAN / VALUE (Deep Value + Improving Qual or Oversold)
+        elif adj_val_score >= 0.8 and (qual_score >= 1 or tech_rsi < 30):
             decision = "VALUE ACCUMULATE"
-            decision_rationale.append("Deep value with early signs of qualitative turnaround")
+            decision_rationale.append(f"Deep value. Trend: {tech_trend}, RSI: {tech_rsi}")
 
         # 4. QUALITY HOLD (Strong Quant but no news/expensive)
         elif quant_score >= 4:
@@ -181,14 +189,14 @@ for ticker in tickers:
             decision_rationale.append("Maintaining position on strong business fundamentals")
 
         # 5. SPECIAL SITUATIONS
-        elif is_turnaround and (cat_score >= 2 or qual_score >= 1):
+        elif is_turnaround and (cat_score >= 2 or qual_score >= 1 or tech_score > 0):
             decision = "SPECULATIVE TURNAROUND"
-            decision_rationale.append("High-risk turnaround showing initial catalyst signs")
+            decision_rationale.append(f"High-risk turnaround showing initial catalyst/momentum signs ({tech_trend})")
 
         # 6. RISK/AVOID
-        elif qual_score <= -2 or (quant_score <= 1 and adj_val_score <= 0.3):
+        elif qual_score <= -2 or (quant_score <= 1 and adj_val_score <= 0.3) or tech_score <= -2:
             decision = "AVOID / EXIT"
-            decision_rationale.append("Material negative news or deteriorating fundamental/valuation profile")
+            decision_rationale.append(f"Material negative news, poor fundamentals, or strong bearish trend ({tech_trend})")
 
         else:
             decision = "NEUTRAL / WATCH"
@@ -235,6 +243,9 @@ for ticker in tickers:
             "CatalystTriggers": "; ".join(cat_triggers),
             "AvgDailyValue": avg_daily_value,
             "Turnaround": is_turnaround,
+            "TechScore": tech_score,
+            "Trend": tech_trend,
+            "RSI": tech_rsi,
         })
     except Exception as e:
         print(f"Error processing {ticker}: {e}")
@@ -248,6 +259,7 @@ df["PortfolioScore"] = (
     + df["OrderScore"] * 1.2
     + df["GovScore"] * 0.5
     + df["AdjValuationScore"] * 2
+    + df["TechScore"] * 1.0  # Technical momentum weight
 )
 
 df["DividendTilt"] = df["DividendYield"].fillna(0).clip(upper=0.06)
@@ -261,6 +273,7 @@ max_portfolio_score = (
     + 2       # Qual
     + 3 * 1.5 # Catalyst
     + 1 * 2   # Valuation
+    + 3 * 1.0 # Technical (Max 2 for trend + 1 for RSI)
 )
 
 df["ConvictionPct"] = df["AdjPortfolioScore"] / max_portfolio_score
