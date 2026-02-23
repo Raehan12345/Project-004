@@ -5,29 +5,48 @@ import yfinance as yf
 def get_intraday_signal(quote_client, ticker):
     try:
         stock = yf.Ticker(ticker)
-        # Fetch 5 days of 15m data to calculate 'normal' volatility
+        # Fetch 5 days of 15m data to capture volume and price
         hist = stock.history(period="5d", interval="15m")
         if hist.empty: return "NO_DATA"
 
         current_price = hist['Close'].iloc[-1]
-        prev_close = stock.info.get('previousClose')
+        prev_close = stock.info.get('previousClose', current_price)
         
-        # 1. Calculate Standard Deviation of returns
+        # Volatility Calculation
         returns = hist['Close'].pct_change().dropna()
         volatility = returns.std() 
-        
-        # 2. Calculate the current move
         change_pct = (current_price - prev_close) / prev_close
         
-        # 3. Dynamic Threshold: Only buy if the dip is > 2 standard deviations
-        # This scales automatically: AAPL might trigger at -1.2%, TSLA at -3.5%
-        dynamic_threshold = -2 * volatility 
+        # 1. Mean Reversion Trigger (The Dip Buy)
+        dynamic_dip_threshold = -2 * volatility 
         
-        print(f"📊 {ticker} | Price: {current_price:.2f} | Change: {change_pct:.2%} | Threshold: {dynamic_threshold:.2%}")
+        # 2. VWAP & Momentum Trigger (The Breakout Buy)
+        # Calculate intraday VWAP for the most recent day
+        latest_day = hist.index[-1].date()
+        today_data = hist[hist.index.date == latest_day].copy()
+        
+        if not today_data.empty:
+            today_data['Typical_Price'] = (today_data['High'] + today_data['Low'] + today_data['Close']) / 3
+            today_data['Volume_Price'] = today_data['Typical_Price'] * today_data['Volume']
+            vwap = today_data['Volume_Price'].sum() / today_data['Volume'].sum() if today_data['Volume'].sum() > 0 else current_price
+            
+            recent_volume = today_data['Volume'].iloc[-1]
+            avg_volume = today_data['Volume'].mean()
+            
+            # Breakout logic: Price > VWAP and Volume is surging (1.5x average)
+            is_breakout = (current_price > vwap) and (recent_volume > (avg_volume * 1.5))
+        else:
+            is_breakout = False
 
-        if change_pct < dynamic_threshold:
-            return "BUY_NOW"
+        print(f"[{ticker}] Px: {current_price:.2f} | Chg: {change_pct:.2%} | DipReq: {dynamic_dip_threshold:.2%} | Breakout: {is_breakout}")
+
+        if change_pct < dynamic_dip_threshold:
+            return "BUY_DIP"
+        elif is_breakout and change_pct > 0:
+            return "BUY_MOMENTUM"
+            
         return "MONITOR"
 
     except Exception as e:
+        print(f"Signal error for {ticker}: {e}")
         return "ERROR"

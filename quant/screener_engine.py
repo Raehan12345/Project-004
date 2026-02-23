@@ -1,10 +1,8 @@
 # quant/screener_engine.py
-
 import time
 import pandas as pd
 import os
 import yfinance as yf
-import xlsxwriter
 
 # Absolute imports for the Master Controller
 from quant.data import get_info
@@ -34,11 +32,20 @@ from analysis.order_momentum import order_momentum
 from analysis.liquidity import liquidity_cap
 from analysis.portfolio import allocate_portfolio
 
+def get_market_regime(benchmark="^STI"):
+    """Determines macro regime based on benchmark's 200-day moving average."""
+    try:
+        hist = yf.Ticker(benchmark).history(period="1y")
+        if len(hist) < 200:
+            return "BULL" 
+        ma200 = hist['Close'].rolling(window=200).mean().iloc[-1]
+        current = hist['Close'].iloc[-1]
+        return "BULL" if current > ma200 else "BEAR"
+    except Exception as e:
+        print(f"Regime detection failed: {e}")
+        return "BULL"
+
 def run_full_screener():
-    """
-    Main entry point for the screening engine. 
-    Processes tickers, calculates scores, runs backtests, and saves results.
-    """
     TICKER_FILE = "tickers_15.txt"
 
     def load_tickers(file):
@@ -51,11 +58,12 @@ def run_full_screener():
     tickers = load_tickers(TICKER_FILE)
     results = []
 
+    regime = get_market_regime()
+    print(f"Current Market Regime Detected: {regime}")
     print(f"Starting screening for {len(tickers)} tickers...")
 
     for ticker in tickers:
         try:
-            # 1. Fundamental Data & Quant Scoring
             info = get_info(ticker)
             company_name = info.get("longName") or info.get("shortName") or ticker
             avg_volume = info.get("averageVolume")
@@ -68,15 +76,18 @@ def run_full_screener():
             quant_score = score_quant(ratios, sector)
             is_turnaround = turnaround_flag(ratios)
 
-            # 2. Asia-Style Valuation & Dividends
             pe = ratios.get("pe")
             sector_median_pe = get_sector_median_pe(sector)
             val_score = valuation_score(pe, sector_median_pe)
             div_yield = info.get("dividendYield")
             div_adj = dividend_adjustment(div_yield)
+            
+            # --- MACRO REGIME ADAPTION: DIVIDENDS ---
+            if regime == "BEAR":
+                div_adj = div_adj * 1.5 
+                
             adj_val_score = min(val_score + div_adj, 1.0)
 
-            # 3. Qualitative & Catalyst Analysis
             headlines = get_headlines(ticker)
             cat_score, cat_triggers = catalyst_score(headlines)
             order_score, order_signal = order_momentum(headlines)
@@ -84,20 +95,21 @@ def run_full_screener():
             sentiment, event_count = sentiment_score(headlines)
             qual_score = score_qual(sentiment, event_count)
 
-            # 4. Technical & Volatility Overlay
             tech_data = get_technical_signals(ticker)
             tech_score = tech_data["tech_score"]
             tech_trend = tech_data["trend"]
             tech_rsi = tech_data["rsi"]
             vol_multiplier = get_volatility_multiplier(ticker)
+            
+            # --- MACRO REGIME ADAPTION: VOLATILITY ---
+            if regime == "BEAR":
+                vol_multiplier = vol_multiplier * 0.8 
 
-            # 5. Factor Breakdown & Risk Flags
             rules = SECTOR_RULES.get(sector, DEFAULT_RULES)
             breakdown = factor_breakdown(ratios, rules)
             flags = risk_flags(ratios)
             triggers = scenario_triggers(ratios)
 
-            # 6. Decision Matrix Logic
             decision_rationale = []
             if order_score > 0: decision_rationale.append(order_signal)
             if cat_score >= 3: decision_rationale.append("Strong near-term catalyst")
@@ -106,7 +118,6 @@ def run_full_screener():
             if adj_val_score >= 0.8: decision_rationale.append("Attractive valuation vs sector")
             if div_yield and div_yield >= 0.04: decision_rationale.append("Attractive dividend yield")
 
-            # Upgraded Decision Assignment
             if quant_score >= 4 and qual_score >= 2 and adj_val_score >= 0.5 and tech_score > 0:
                 decision = "CORE LONG"
             elif cat_score >= 3 and qual_score >= 2:
@@ -144,7 +155,7 @@ def run_full_screener():
                 "Trend": tech_trend,
                 "RSI": tech_rsi,
                 "VolMultiplier": vol_multiplier,
-                "QuantWeighted": quant_score * 1.5, # For Dashboard
+                "QuantWeighted": quant_score * 1.5,
                 "QualWeighted": qual_score
             })
 
@@ -153,7 +164,6 @@ def run_full_screener():
         except Exception as e:
             print(f"Error processing {ticker}: {e}")
 
-    # --- Portfolio Level Calculations ---
     df = pd.DataFrame(results)
 
     df["PortfolioScore"] = (
@@ -171,17 +181,11 @@ def run_full_screener():
         df["PortfolioScore"] * (1 + df["DividendTilt"]) * df["VolMultiplier"]
     )
 
-    # Normalization & Allocation
     df["LiquidityCap"] = df["AvgDailyValue"].apply(liquidity_cap)
     df["TargetWeight"] = allocate_portfolio(df)
 
-    # Save Results
     df.to_csv("stock_screen_results.csv", index=False)
-    print("✅ Saved results to stock_screen_results.csv")
-
-    # --- Backtesting & Dashboard Logic ---
-    # (Optional: Add your Excel generation and Backtest logic here if desired)
-    print("Screening Complete.")
+    print("Screening Complete. File saved.")
 
 if __name__ == "__main__":
     run_full_screener()
