@@ -4,12 +4,18 @@ from tigeropen.tiger_open_config import TigerOpenClientConfig
 from tigeropen.common.util.signature_utils import read_private_key
 from tigeropen.trade.trade_client import TradeClient
 from tigeropen.quote.quote_client import QuoteClient
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 def get_tiger_client():
     client_config = TigerOpenClientConfig(sandbox_debug=False)
-    client_config.private_key = read_private_key(r"C:\Users\raeha\OneDrive\Desktop\SCRAPE\tiger_private_key.pem") 
-    client_config.tiger_id = "20157527"
-    client_config.account = "21166668457667735"
+    key_path = os.getenv("PRIVATE_KEY_PATH")
+    client_config.private_key = read_private_key(key_path) 
+    client_config.language = 'en_US'
+    client_config.tiger_id = os.getenv("TIGER_ID")
+    client_config.account = os.getenv("TIGER_ACCOUNT")
     
     trade_client = TradeClient(client_config)
     
