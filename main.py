@@ -10,11 +10,9 @@ from quant.earnings_blackout import is_earnings_blackout
 def run_trading_floor():
     print("\n--- ENGINE: STARTING ---")
     
-    # Phase 1: Refresh Rankings (Macro-Regime Adaptive)
     run_full_screener()
     df = pd.read_csv("stock_screen_results.csv")
     
-    # Phase 2: API Handshake
     trade_client, quote_client, account_id = get_tiger_client()
     assets = trade_client.get_assets()
     portfolio_value = assets[0].segments['S'].equity_with_loan
@@ -31,6 +29,9 @@ def run_trading_floor():
     print(f"{'Ticker':<12} | {'Target Qty':<12} | {'Actual Qty':<12} | {'Status'}")
     print("-" * 55)
 
+    # API Optimization: Fetch positions ONCE for Phase 3
+    current_positions = trade_client.get_positions(account=account_id)
+
     for ticker in df['Ticker'].tolist():
         symbol_only = ticker.split('.')[0]
         
@@ -39,28 +40,30 @@ def run_trading_floor():
         if ".SI" in ticker: 
             target_qty = (target_qty // 100) * 100
         
-        actual_qty = get_current_quantity(trade_client, account_id, ticker)
+        actual_qty = get_current_quantity(current_positions, ticker)
         
         status = "MATCH" if actual_qty == target_qty else "MISMATCH"
         print(f"{ticker:<12} | {target_qty:<12} | {actual_qty:<12} | {status}")
 
     # --- Phase 4: Intraday Scan & Entry/Trim ---
     print("\n--- Entry & Scaling ---")
+    
+    # API Optimization: Fetch positions ONCE for Phase 4
+    current_positions = trade_client.get_positions(account=account_id)
+    
     for ticker in df['Ticker'].tolist():
         symbol_only = ticker.split('.')[0]
-        actual_qty = get_current_quantity(trade_client, account_id, ticker)
+        actual_qty = get_current_quantity(current_positions, ticker)
         
-        # CORE INITIALIZATION
         if actual_qty == 0:
             if is_earnings_blackout(ticker):
                 print(f"SKIPPING CORE INITIALIZATION: {ticker} is in a 48-hour Earnings Blackout.")
                 continue
                 
             print(f"INITIALIZING CORE: {ticker} has 0 holdings. Deploying 50% baseline.")
-            execute_trade(trade_client, account_id, ticker, (weights[symbol_only] * 0.5))
+            execute_trade(trade_client, account_id, ticker, (weights[symbol_only] * 0.5), actual_qty, signal_type="CORE_INIT")
             continue
             
-        # SATELLITE SCALING
         signal = get_intraday_signal(quote_client, ticker)
         
         if signal in ["BUY_DIP", "BUY_MOMENTUM"]:
@@ -70,10 +73,12 @@ def run_trading_floor():
                 
             trigger_type = "Mean Reversion Dip" if signal == "BUY_DIP" else "VWAP Momentum Breakout"
             print(f"SCALING TRIGGER: {ticker} hit {trigger_type}. Reconciling full delta...")
-            execute_trade(trade_client, account_id, ticker, weights[symbol_only])
+            execute_trade(trade_client, account_id, ticker, weights[symbol_only], actual_qty, signal_type=signal)
             
     # Phase 5: Portfolio Cleanup
     print("\n--- Validating Exits ---")
+    
+    # API Optimization: Fetch positions ONCE for Phase 5
     current_positions = trade_client.get_positions(account=account_id)
     top_symbols = list(weights.keys()) 
 
@@ -93,7 +98,7 @@ def run_trading_floor():
                 else: 
                     full_ticker = f"{raw_symbol}.SI"
             
-            execute_trade(trade_client, account_id, full_ticker, 0)
+            execute_trade(trade_client, account_id, full_ticker, 0, quantity, signal_type="CLEANUP_LIQUIDATION")
         else:
             if quantity > 0:
                 print(f"HOLD: {raw_symbol} maintains Model Ranking.")

@@ -14,27 +14,26 @@ def log_trade(ticker, action, quantity, price, signal_type, trail_pct="N/A"):
     with open(file_name, mode='a', newline='') as file:
         writer = csv.writer(file)
         if not file_exists:
-            # Create headers if the file is new
             writer.writerow(["Timestamp", "Ticker", "Action", "Quantity", "ExecutionPrice", "SignalType", "TrailingStopPct"])
         
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         writer.writerow([timestamp, ticker, action, quantity, price, signal_type, trail_pct])
 
-def get_current_quantity(trade_client, account_id, ticker):
+def get_current_quantity(positions, ticker):
     """
-    Checks the Tiger account using normalized symbols to avoid double-buying.
+    Checks the local memory positions array using normalized symbols.
+    No longer makes an API call.
     """
     try:
         search_symbol = ticker.split('.')[0].upper()
         
-        positions = trade_client.get_positions(account=account_id)
         for pos in positions:
             pos_symbol = pos.contract.symbol.split('.')[0].upper()
             if pos_symbol == search_symbol:
                 return pos.quantity
         return 0
     except Exception as e:
-        print(f"Position fetch failed for {ticker}: {e}")
+        print(f"Position check failed for {ticker}: {e}")
         return 0
 
 def get_atr(ticker, period=14):
@@ -54,7 +53,10 @@ def get_atr(ticker, period=14):
         print(f"ATR calculation failed for {ticker}: {e}")
         return None
 
-def execute_trade(trade_client, account_id, ticker, target_weight, signal_type="UNKNOWN"):
+def execute_trade(trade_client, account_id, ticker, target_weight, current_qty, signal_type="UNKNOWN"):
+    """
+    Executes a trade. Now accepts current_qty directly to prevent redundant API calls.
+    """
     try:
         assets = trade_client.get_assets()
         portfolio_value = assets[0].segments['S'].equity_with_loan
@@ -65,8 +67,6 @@ def execute_trade(trade_client, account_id, ticker, target_weight, signal_type="
         if ".SI" in ticker:
             target_qty = (target_qty // 100) * 100
 
-        symbol_only = ticker.split('.')[0]
-        current_qty = get_current_quantity(trade_client, account_id, symbol_only)
         needed_qty = target_qty - current_qty
         
         if needed_qty == 0:
@@ -83,6 +83,7 @@ def execute_trade(trade_client, account_id, ticker, target_weight, signal_type="
 
         print(f"EXECUTION LOGIC: {action} {ticker} | Target: {target_qty} | Delta: {needed_qty}")
 
+        symbol_only = ticker.split('.')[0]
         contracts = trade_client.get_contracts(ticker, sec_type='STK')
         if not contracts:
             if ".SI" in ticker or ".NS" in ticker or ".HK" in ticker:
@@ -100,7 +101,6 @@ def execute_trade(trade_client, account_id, ticker, target_weight, signal_type="
             trade_client.place_order(primary_order)
             print(f"SUCCESS: {action} order for {abs_qty} shares of {ticker} transmitted.")
             
-            # Default trail_pct to N/A for logging
             trail_pct = "N/A"
             
             if action == 'BUY':
@@ -119,7 +119,6 @@ def execute_trade(trade_client, account_id, ticker, target_weight, signal_type="
                     trade_client.place_order(stop_order)
                     print(f"RISK MANAGEMENT: Server-side trailing stop attached at {trail_pct}% distance.")
 
-            # Append the trade to the CSV log immediately after successful transmission
             log_trade(ticker, action, int(abs_qty), latest_price, signal_type, trail_pct)
 
         else:

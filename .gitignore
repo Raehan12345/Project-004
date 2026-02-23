@@ -26,3 +26,6 @@ tiger_private_key.pem
  execution/broker_api.py
 
  legacy/old_main.py
+
+ trade_log.csv
+ 
