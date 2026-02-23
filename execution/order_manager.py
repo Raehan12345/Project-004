@@ -1,7 +1,24 @@
 # execution/order_manager.py
 import pandas as pd
 import yfinance as yf
+import csv
+import os
+from datetime import datetime
 from tigeropen.common.util.order_utils import market_order, trail_order
+
+def log_trade(ticker, action, quantity, price, signal_type, trail_pct="N/A"):
+    """Appends executed trades to a local CSV for post-trade auditing."""
+    file_name = "trade_log.csv"
+    file_exists = os.path.isfile(file_name)
+    
+    with open(file_name, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        if not file_exists:
+            # Create headers if the file is new
+            writer.writerow(["Timestamp", "Ticker", "Action", "Quantity", "ExecutionPrice", "SignalType", "TrailingStopPct"])
+        
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        writer.writerow([timestamp, ticker, action, quantity, price, signal_type, trail_pct])
 
 def get_current_quantity(trade_client, account_id, ticker):
     """
@@ -37,7 +54,7 @@ def get_atr(ticker, period=14):
         print(f"ATR calculation failed for {ticker}: {e}")
         return None
 
-def execute_trade(trade_client, account_id, ticker, target_weight):
+def execute_trade(trade_client, account_id, ticker, target_weight, signal_type="UNKNOWN"):
     try:
         assets = trade_client.get_assets()
         portfolio_value = assets[0].segments['S'].equity_with_loan
@@ -74,7 +91,6 @@ def execute_trade(trade_client, account_id, ticker, target_weight):
         if contracts:
             contract = contracts[0]
             
-            # 1. Place the primary Market Order
             primary_order = market_order(
                 account=account_id, 
                 contract=contract, 
@@ -84,14 +100,13 @@ def execute_trade(trade_client, account_id, ticker, target_weight):
             trade_client.place_order(primary_order)
             print(f"SUCCESS: {action} order for {abs_qty} shares of {ticker} transmitted.")
             
-            # 2. Attach a Trailing Stop Order if it is a BUY
+            # Default trail_pct to N/A for logging
+            trail_pct = "N/A"
+            
             if action == 'BUY':
                 atr = get_atr(ticker)
                 if atr:
-                    # Calculate trailing percent based on 2x ATR
                     trail_pct = round(((2 * atr) / latest_price) * 100, 2)
-                    
-                    # Maximum allowable trail percent in most brokers is usually 20%
                     trail_pct = min(trail_pct, 20.0)
                     
                     stop_order = trail_order(
@@ -103,6 +118,9 @@ def execute_trade(trade_client, account_id, ticker, target_weight):
                     )
                     trade_client.place_order(stop_order)
                     print(f"RISK MANAGEMENT: Server-side trailing stop attached at {trail_pct}% distance.")
+
+            # Append the trade to the CSV log immediately after successful transmission
+            log_trade(ticker, action, int(abs_qty), latest_price, signal_type, trail_pct)
 
         else:
             print(f"ERROR: Could not resolve contract for {ticker}")
