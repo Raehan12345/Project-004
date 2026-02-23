@@ -12,3 +12,17 @@ stock_screen_results.csv
 # OS specific
 .DS_Store
 Thumbs.db
+
+# Tiger Brokers Private Key
+*.pem
+
+# If you named it something specific, you can also use:
+tiger_private_key.pem
+
+# Credentials and environment files
+.env
+
+#Broker_API_Connection
+ execution/broker_api.py
+
+ legacy/old_main.py
