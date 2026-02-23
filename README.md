@@ -1,4 +1,4 @@
-# Multi-Market Quantitative Execution Engine
+# Autonomous Equity Trading with Python
 
 ## Overview
 A modular, production-grade algorithmic trading system built in Python. This framework automates the lifecycle of a long-only equity rebalancing strategy, integrating real-time market data analysis with state-aware execution across **SGX, HKEX, NYSE, and NSE**.

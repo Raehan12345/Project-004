@@ -8,7 +8,7 @@ from execution.order_manager import execute_trade, get_current_quantity
 from quant.earnings_blackout import is_earnings_blackout
 
 def run_trading_floor():
-    print("\n--- ENGINE: STARTING ---")
+    print("\n--- STARTING ---")
     
     run_full_screener()
     df = pd.read_csv("stock_screen_results.csv")
