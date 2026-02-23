@@ -1,7 +1,7 @@
 # execution/order_manager.py
 import pandas as pd
 import yfinance as yf
-from tigeropen.common.util.order_utils import market_order
+from tigeropen.common.util.order_utils import market_order, trail_order
 
 def get_current_quantity(trade_client, account_id, ticker):
     """
@@ -38,9 +38,6 @@ def get_atr(ticker, period=14):
         return None
 
 def execute_trade(trade_client, account_id, ticker, target_weight):
-    """
-    Executes a trade based on current vs target allocation with volatility-based limits.
-    """
     try:
         assets = trade_client.get_assets()
         portfolio_value = assets[0].segments['S'].equity_with_loan
@@ -48,7 +45,6 @@ def execute_trade(trade_client, account_id, ticker, target_weight):
         latest_price = stock.fast_info['last_price']
         
         target_qty = int((portfolio_value * target_weight) / latest_price)
-        
         if ".SI" in ticker:
             target_qty = (target_qty // 100) * 100
 
@@ -57,7 +53,6 @@ def execute_trade(trade_client, account_id, ticker, target_weight):
         needed_qty = target_qty - current_qty
         
         if needed_qty == 0:
-            print(f"HOLD: {ticker} position is at target ({current_qty}).")
             return
             
         action = 'BUY' if needed_qty > 0 else 'SELL'
@@ -69,38 +64,46 @@ def execute_trade(trade_client, account_id, ticker, target_weight):
         if abs_qty <= 0:
             return
 
-        print(f"EXECUTION: {action} {ticker} | Own: {current_qty} | Target: {target_qty} | Delta: {needed_qty}")
-        
-        # ATR-Based Risk Guardrails
-        atr = get_atr(ticker)
-        if atr:
-            stop_loss_price = latest_price - (2 * atr)
-            take_profit_price = latest_price + (3 * atr)
-            limit_type = "ATR-Aware"
-        else:
-            stop_loss_price = latest_price * 0.98
-            take_profit_price = latest_price * 1.05
-            limit_type = "Static 2%"
-            
-        print(f"LIMITS ({limit_type}) -> SL: {stop_loss_price:.2f} | TP: {take_profit_price:.2f}")
+        print(f"EXECUTION LOGIC: {action} {ticker} | Target: {target_qty} | Delta: {needed_qty}")
 
         contracts = trade_client.get_contracts(ticker, sec_type='STK')
-        
         if not contracts:
             if ".SI" in ticker or ".NS" in ticker or ".HK" in ticker:
                 contracts = trade_client.get_contracts(symbol_only, sec_type='STK')
 
         if contracts:
             contract = contracts[0]
-            order = market_order(
+            
+            # 1. Place the primary Market Order
+            primary_order = market_order(
                 account=account_id, 
                 contract=contract, 
                 action=action, 
                 quantity=int(abs_qty)
             )
-            
-            trade_client.place_order(order)
+            trade_client.place_order(primary_order)
             print(f"SUCCESS: {action} order for {abs_qty} shares of {ticker} transmitted.")
+            
+            # 2. Attach a Trailing Stop Order if it is a BUY
+            if action == 'BUY':
+                atr = get_atr(ticker)
+                if atr:
+                    # Calculate trailing percent based on 2x ATR
+                    trail_pct = round(((2 * atr) / latest_price) * 100, 2)
+                    
+                    # Maximum allowable trail percent in most brokers is usually 20%
+                    trail_pct = min(trail_pct, 20.0)
+                    
+                    stop_order = trail_order(
+                        account=account_id,
+                        contract=contract,
+                        action='SELL',
+                        quantity=int(abs_qty),
+                        trailing_percent=trail_pct
+                    )
+                    trade_client.place_order(stop_order)
+                    print(f"RISK MANAGEMENT: Server-side trailing stop attached at {trail_pct}% distance.")
+
         else:
             print(f"ERROR: Could not resolve contract for {ticker}")
 

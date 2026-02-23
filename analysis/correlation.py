@@ -1,0 +1,50 @@
+# analysis/correlation.py
+import yfinance as yf
+import pandas as pd
+
+def apply_correlation_penalty(df, final_weights, threshold=0.80):
+    """
+    Penalizes the target weight of assets that are highly correlated to 
+    higher-conviction assets in the portfolio.
+    """
+    tickers = df['Ticker'].tolist()
+    
+    # Fetch 90-day daily closing prices for the universe
+    try:
+        data = yf.download(tickers, period="90d", interval="1d", progress=False)['Close']
+        returns = data.pct_change().dropna()
+        corr_matrix = returns.corr()
+    except Exception as e:
+        print(f"Correlation calculation failed: {e}. Bypassing penalty.")
+        return final_weights
+
+    adjusted_weights = final_weights.copy()
+    
+    # Sort by conviction to prioritize the highest-ranked stocks
+    sorted_indices = df.sort_values("AdjPortfolioScore", ascending=False).index
+
+    for i in range(len(sorted_indices)):
+        idx_primary = sorted_indices[i]
+        ticker_primary = df.loc[idx_primary, 'Ticker']
+        
+        for j in range(i + 1, len(sorted_indices)):
+            idx_secondary = sorted_indices[j]
+            ticker_secondary = df.loc[idx_secondary, 'Ticker']
+            
+            try:
+                # Check correlation between the two assets
+                correlation = corr_matrix.loc[ticker_primary, ticker_secondary]
+                
+                # If highly correlated, slash the secondary asset's weight by 50%
+                if correlation > threshold:
+                    penalty_factor = 0.50
+                    adjusted_weights.loc[idx_secondary] *= penalty_factor
+                    print(f"CORRELATION PENALTY: {ticker_secondary} is {correlation:.2f} correlated to {ticker_primary}. Weight reduced.")
+            except KeyError:
+                continue
+
+    # Re-normalize to ensure 100% deployment
+    if adjusted_weights.sum() > 0:
+        return adjusted_weights / adjusted_weights.sum()
+        
+    return adjusted_weights

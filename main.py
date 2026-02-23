@@ -5,9 +5,10 @@ from execution.broker_api import get_tiger_client
 from quant.screener_engine import run_full_screener
 from quant.intraday_signals import get_intraday_signal
 from execution.order_manager import execute_trade, get_current_quantity
+from quant.earnings_blackout import is_earnings_blackout
 
 def run_trading_floor():
-    print("\n--- UPGRADED QUANT ENGINE: STARTING ---")
+    print("\n--- ENGINE: STARTING ---")
     
     # Phase 1: Refresh Rankings (Macro-Regime Adaptive)
     run_full_screener()
@@ -26,7 +27,7 @@ def run_trading_floor():
         ticker_map[sym] = row['Ticker']
     
     # Phase 3: Diagnostic Health Check
-    print("\n--- PORTFOLIO HEALTH CHECK: Target vs. Actual ---")
+    print("\n--- PORTFOLIO CHECK: Target vs. Actual ---")
     print(f"{'Ticker':<12} | {'Target Qty':<12} | {'Actual Qty':<12} | {'Status'}")
     print("-" * 55)
 
@@ -43,30 +44,36 @@ def run_trading_floor():
         status = "MATCH" if actual_qty == target_qty else "MISMATCH"
         print(f"{ticker:<12} | {target_qty:<12} | {actual_qty:<12} | {status}")
 
- # --- Phase 4: Intraday Scan & Entry/Trim ---
-    print("\n--- SCANNING: Adaptive Entry & Scaling ---")
+    # --- Phase 4: Intraday Scan & Entry/Trim ---
+    print("\n--- Entry & Scaling ---")
     for ticker in df['Ticker'].tolist():
         symbol_only = ticker.split('.')[0]
         actual_qty = get_current_quantity(trade_client, account_id, ticker)
         
-        # CORE INITIALIZATION: If we own nothing, establish a 50% baseline immediately
+        # CORE INITIALIZATION
         if actual_qty == 0:
+            if is_earnings_blackout(ticker):
+                print(f"SKIPPING CORE INITIALIZATION: {ticker} is in a 48-hour Earnings Blackout.")
+                continue
+                
             print(f"INITIALIZING CORE: {ticker} has 0 holdings. Deploying 50% baseline.")
-            # Pass half the target weight to the order manager
             execute_trade(trade_client, account_id, ticker, (weights[symbol_only] * 0.5))
-            continue # Move to the next stock after initializing
+            continue
             
-        # SATELLITE SCALING: If we already have a position, wait for the quant signals
+        # SATELLITE SCALING
         signal = get_intraday_signal(quote_client, ticker)
         
         if signal in ["BUY_DIP", "BUY_MOMENTUM"]:
+            if is_earnings_blackout(ticker):
+                print(f"SKIPPING SCALING: {ticker} triggered a buy signal, but is in an Earnings Blackout.")
+                continue
+                
             trigger_type = "Mean Reversion Dip" if signal == "BUY_DIP" else "VWAP Momentum Breakout"
             print(f"SCALING TRIGGER: {ticker} hit {trigger_type}. Reconciling full delta...")
-            # Pass the full target weight to top up the position
             execute_trade(trade_client, account_id, ticker, weights[symbol_only])
             
     # Phase 5: Portfolio Cleanup
-    print("\n--- CLEANUP: Validating Exits ---")
+    print("\n--- Validating Exits ---")
     current_positions = trade_client.get_positions(account=account_id)
     top_symbols = list(weights.keys()) 
 
