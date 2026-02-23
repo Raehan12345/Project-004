@@ -1,5 +1,4 @@
 # analysis/volatility.py
-
 import yfinance as yf
 import numpy as np
 
@@ -9,7 +8,8 @@ def get_volatility_multiplier(ticker):
         if len(hist) < 30:
             return 1.0
             
-        returns = hist['Close'].pct_change().dropna()
+        # Fixed Pandas warning by explicitly declaring fill_method
+        returns = hist['Close'].pct_change(fill_method=None).dropna()
         daily_vol = returns.rolling(window=30).std().iloc[-1]
         ann_vol = daily_vol * np.sqrt(252)
         

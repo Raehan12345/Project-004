@@ -24,19 +24,28 @@ def run_trading_floor():
         weights[sym] = row['TargetWeight']
         ticker_map[sym] = row['Ticker']
     
-    # 3: Diagnostic Check
+    # Phase 3: Diagnostic Health Check
     print("\n--- PORTFOLIO CHECK: Target vs. Actual ---")
     print(f"{'Ticker':<12} | {'Target Qty':<12} | {'Actual Qty':<12} | {'Status'}")
     print("-" * 55)
 
-    # API Opti: Fetch positions once
     current_positions = trade_client.get_positions(account=account_id)
 
     for ticker in df['Ticker'].tolist():
-        symbol_only = ticker.split('.')[0]
+        raw_sym = ticker.split('.')[0]
+        tiger_sym = raw_sym.zfill(5) if ".HK" in ticker else raw_sym
         
-        latest_price = yf.Ticker(ticker).fast_info['last_price']
-        target_qty = int((portfolio_value * weights[symbol_only]) / latest_price)
+        try:
+            quote = quote_client.get_stock_briefs([tiger_sym])
+            if quote is None or quote.empty:
+                raise ValueError("Empty Quote")
+            latest_price = float(quote['latest_price'].iloc[0])
+        except Exception as e:
+            # Fallback notification injected here
+            print(f"[{ticker}] Tiger Live Data Failed ({e}). FALLING BACK TO YAHOO.")
+            latest_price = yf.Ticker(ticker).fast_info['last_price']
+        
+        target_qty = int((portfolio_value * weights[raw_sym]) / latest_price)
         if ".SI" in ticker: 
             target_qty = (target_qty // 100) * 100
         
@@ -45,14 +54,13 @@ def run_trading_floor():
         status = "MATCH" if actual_qty == target_qty else "MISMATCH"
         print(f"{ticker:<12} | {target_qty:<12} | {actual_qty:<12} | {status}")
 
-    # 4: Intraday Scan & Entry/Trim
+    # --- Phase 4: Intraday Scan & Entry/Trim ---
     print("\n--- Entry & Scaling ---")
     
-    # API Opti: Fetch positions once
     current_positions = trade_client.get_positions(account=account_id)
     
     for ticker in df['Ticker'].tolist():
-        symbol_only = ticker.split('.')[0]
+        raw_sym = ticker.split('.')[0]
         actual_qty = get_current_quantity(current_positions, ticker)
         
         if actual_qty == 0:
@@ -61,7 +69,7 @@ def run_trading_floor():
                 continue
                 
             print(f"INITIALIZING CORE: {ticker} has 0 holdings. Deploying 50% baseline.")
-            execute_trade(trade_client, account_id, ticker, (weights[symbol_only] * 0.5), actual_qty, signal_type="CORE_INIT")
+            execute_trade(trade_client, quote_client, account_id, ticker, (weights[raw_sym] * 0.5), actual_qty, signal_type="CORE_INIT")
             continue
             
         signal = get_intraday_signal(quote_client, ticker)
@@ -73,12 +81,11 @@ def run_trading_floor():
                 
             trigger_type = "Mean Reversion Dip" if signal == "BUY_DIP" else "VWAP Momentum Breakout"
             print(f"SCALING TRIGGER: {ticker} hit {trigger_type}. Reconciling full delta...")
-            execute_trade(trade_client, account_id, ticker, weights[symbol_only], actual_qty, signal_type=signal)
+            execute_trade(trade_client, quote_client, account_id, ticker, weights[raw_sym], actual_qty, signal_type=signal)
             
-    # 5: Portfolio Cleanup
+    # Phase 5: Portfolio Cleanup
     print("\n--- Validating Exits ---")
     
-    # API Opti: Fetch positions once
     current_positions = trade_client.get_positions(account=account_id)
     top_symbols = list(weights.keys()) 
 
@@ -98,7 +105,7 @@ def run_trading_floor():
                 else: 
                     full_ticker = f"{raw_symbol}.SI"
             
-            execute_trade(trade_client, account_id, full_ticker, 0, quantity, signal_type="CLEANUP_LIQUIDATION")
+            execute_trade(trade_client, quote_client, account_id, full_ticker, 0, quantity, signal_type="CLEANUP_LIQUIDATION")
         else:
             if quantity > 0:
                 print(f"HOLD: {raw_symbol} maintains Model Ranking.")
