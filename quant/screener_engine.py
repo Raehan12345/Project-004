@@ -1,10 +1,10 @@
 # quant/screener_engine.py
+
 import time
 import pandas as pd
 import os
 import yfinance as yf
 
-# Absolute imports for the Master Controller
 from quant.data import get_info
 from quant.ratios import extract_ratios
 from quant.score_quant import score_quant
@@ -33,7 +33,6 @@ from analysis.liquidity import liquidity_cap
 from analysis.portfolio import allocate_portfolio
 
 def get_market_regime(benchmark="^STI"):
-    """Determines macro regime based on benchmark's 200-day moving average."""
     try:
         hist = yf.Ticker(benchmark).history(period="1y")
         if len(hist) < 200:
@@ -82,7 +81,6 @@ def run_full_screener():
             div_yield = info.get("dividendYield")
             div_adj = dividend_adjustment(div_yield)
             
-            # --- MACRO REGIME ADAPTION: DIVIDENDS ---
             if regime == "BEAR":
                 div_adj = div_adj * 1.5 
                 
@@ -101,7 +99,6 @@ def run_full_screener():
             tech_rsi = tech_data["rsi"]
             vol_multiplier = get_volatility_multiplier(ticker)
             
-            # --- MACRO REGIME ADAPTION: VOLATILITY ---
             if regime == "BEAR":
                 vol_multiplier = vol_multiplier * 0.8 
 

@@ -24,12 +24,12 @@ def run_trading_floor():
         weights[sym] = row['TargetWeight']
         ticker_map[sym] = row['Ticker']
     
-    # Phase 3: Diagnostic Health Check
+    # 3: Diagnostic Check
     print("\n--- PORTFOLIO CHECK: Target vs. Actual ---")
     print(f"{'Ticker':<12} | {'Target Qty':<12} | {'Actual Qty':<12} | {'Status'}")
     print("-" * 55)
 
-    # API Optimization: Fetch positions ONCE for Phase 3
+    # API Opti: Fetch positions once
     current_positions = trade_client.get_positions(account=account_id)
 
     for ticker in df['Ticker'].tolist():
@@ -45,10 +45,10 @@ def run_trading_floor():
         status = "MATCH" if actual_qty == target_qty else "MISMATCH"
         print(f"{ticker:<12} | {target_qty:<12} | {actual_qty:<12} | {status}")
 
-    # --- Phase 4: Intraday Scan & Entry/Trim ---
+    # 4: Intraday Scan & Entry/Trim
     print("\n--- Entry & Scaling ---")
     
-    # API Optimization: Fetch positions ONCE for Phase 4
+    # API Opti: Fetch positions once
     current_positions = trade_client.get_positions(account=account_id)
     
     for ticker in df['Ticker'].tolist():
@@ -75,10 +75,10 @@ def run_trading_floor():
             print(f"SCALING TRIGGER: {ticker} hit {trigger_type}. Reconciling full delta...")
             execute_trade(trade_client, account_id, ticker, weights[symbol_only], actual_qty, signal_type=signal)
             
-    # Phase 5: Portfolio Cleanup
+    # 5: Portfolio Cleanup
     print("\n--- Validating Exits ---")
     
-    # API Optimization: Fetch positions ONCE for Phase 5
+    # API Opti: Fetch positions once
     current_positions = trade_client.get_positions(account=account_id)
     top_symbols = list(weights.keys()) 
 

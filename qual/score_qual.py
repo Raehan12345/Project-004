@@ -1,10 +1,6 @@
 # qual/score_qual.py
 
 def score_qual(sentiment, event_count):
-    """
-    Upgraded qualitative scoring using Saliency-Weighting.
-    Distinguishes between 'Noise', 'Signal', and 'Conviction'.
-    """
     if event_count == 0:
         return 0
 

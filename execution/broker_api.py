@@ -19,15 +19,15 @@ def get_tiger_client():
     
     trade_client = TradeClient(client_config)
     
-    # Force grab permission on initialization
+    # Force grab 
     quote_client = QuoteClient(client_config, is_grab_permission=True)
     
-    # Manual grab to override any other active sessions (App/Desktop)
+    # Manual grab to override
     try:
         quote_client.grab_quote_permission()
-        print("✅ Market Data Permission Grabbed successfully.")
+        print(" Market Data Permission Grabbed successfully.")
     except Exception as e:
-        print(f"⚠️ Permission grab failed (you might need to close the Tiger App): {e}")
+        print(f" Permission grab failed (you might need to close the Tiger App): {e}")
         
     return trade_client, quote_client, client_config.account
 
@@ -36,20 +36,20 @@ if __name__ == "__main__":
         print("--- Testing Tiger Brokers API Connection ---")
         trade_client, quote_client, account_id = get_tiger_client()
         
-        # Fetch assets to verify connection
+        # fetch assets - verify connection
         assets = trade_client.get_assets()
         
-        print("\n✅ Connection Successful!")
+        print("\n Connection Successful!")
         if assets:
-            # We look at the first asset object returned
+            # first asset object returned
             account_info = assets[0]
             print(f"Active Account: {account_info.account}")
             
-            # Check for the Securities ('S') segment (Standard for SGX/HKEX)
+            #  ('S') segment 
             if 'S' in account_info.segments:
                 sec_segment = account_info.segments['S']
                 
-                # Fetch available funds with fallback logic
+                # available funds with fallback logic
                 cash_balance = getattr(sec_segment, 'available_funds', 
                                getattr(sec_segment, 'cash', 
                                getattr(sec_segment, 'net_liquidation', "N/A")))
@@ -58,7 +58,7 @@ if __name__ == "__main__":
             else:
                 print(f"Net Liquidation Value: {getattr(account_info, 'net_liquidation', 'N/A')}")
         else:
-            print("⚠️ Connected, but no asset data was found. Is the account initialized?")
+            print(" Connected, but no asset data was found. Is the account initialized?")
             
     except Exception as e:
-        print(f"\n❌ Connection Failed: {e}")
+        print(f"\n Connection Failed: {e}")

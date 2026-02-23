@@ -4,10 +4,6 @@ import pandas as pd
 from datetime import datetime, timedelta, timezone
 
 def is_earnings_blackout(ticker, blackout_hours=48):
-    """
-    Checks if a ticker is reporting earnings within the specified blackout window.
-    Returns True if trading should be paused to avoid binary event risk.
-    """
     try:
         stock = yf.Ticker(ticker)
         # Fetch upcoming and recent earnings dates

@@ -9,7 +9,7 @@ def apply_correlation_penalty(df, final_weights, threshold=0.80):
     """
     tickers = df['Ticker'].tolist()
     
-    # Fetch 90-day daily closing prices for the universe
+    #90-day daily closing prices for the universe
     try:
         data = yf.download(tickers, period="90d", interval="1d", progress=False)['Close']
         returns = data.pct_change().dropna()
@@ -20,7 +20,7 @@ def apply_correlation_penalty(df, final_weights, threshold=0.80):
 
     adjusted_weights = final_weights.copy()
     
-    # Sort by conviction to prioritize the highest-ranked stocks
+    #prioritize the highest-ranked stocks (conviction)
     sorted_indices = df.sort_values("AdjPortfolioScore", ascending=False).index
 
     for i in range(len(sorted_indices)):
@@ -32,10 +32,10 @@ def apply_correlation_penalty(df, final_weights, threshold=0.80):
             ticker_secondary = df.loc[idx_secondary, 'Ticker']
             
             try:
-                # Check correlation between the two assets
+                # correl
                 correlation = corr_matrix.loc[ticker_primary, ticker_secondary]
                 
-                # If highly correlated, slash the secondary asset's weight by 50%
+                # slash the secondary asset's weight by 50% if high correl
                 if correlation > threshold:
                     penalty_factor = 0.50
                     adjusted_weights.loc[idx_secondary] *= penalty_factor
@@ -43,7 +43,7 @@ def apply_correlation_penalty(df, final_weights, threshold=0.80):
             except KeyError:
                 continue
 
-    # Re-normalize to ensure 100% deployment
+    # Re-normalize 
     if adjusted_weights.sum() > 0:
         return adjusted_weights / adjusted_weights.sum()
         

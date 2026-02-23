@@ -29,11 +29,11 @@ def allocate_portfolio(df, max_sector_weight=0.30):
         capped_weights.loc[idx] = weight
         sector_exposure[sector] = current_sector_weight + weight
 
-    # Normalize before correlation
+    # Normalize 
     if capped_weights.sum() > 0:
         capped_weights = capped_weights / capped_weights.sum()
         
-    # Apply the Statistical Correlation Penalty
+    # correl penalty
     final_weights = apply_correlation_penalty(df, capped_weights)
     
     return final_weights

@@ -6,8 +6,8 @@ import os
 from datetime import datetime
 from tigeropen.common.util.order_utils import market_order, trail_order
 
+#trade logging
 def log_trade(ticker, action, quantity, price, signal_type, trail_pct="N/A"):
-    """Appends executed trades to a local CSV for post-trade auditing."""
     file_name = "trade_log.csv"
     file_exists = os.path.isfile(file_name)
     
@@ -19,11 +19,8 @@ def log_trade(ticker, action, quantity, price, signal_type, trail_pct="N/A"):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         writer.writerow([timestamp, ticker, action, quantity, price, signal_type, trail_pct])
 
+#positions
 def get_current_quantity(positions, ticker):
-    """
-    Checks the local memory positions array using normalized symbols.
-    No longer makes an API call.
-    """
     try:
         search_symbol = ticker.split('.')[0].upper()
         
@@ -37,7 +34,6 @@ def get_current_quantity(positions, ticker):
         return 0
 
 def get_atr(ticker, period=14):
-    """Calculates Average True Range (ATR) for volatility-based stops."""
     try:
         data = yf.Ticker(ticker).history(period="30d")
         if len(data) < period: 
@@ -54,9 +50,6 @@ def get_atr(ticker, period=14):
         return None
 
 def execute_trade(trade_client, account_id, ticker, target_weight, current_qty, signal_type="UNKNOWN"):
-    """
-    Executes a trade. Now accepts current_qty directly to prevent redundant API calls.
-    """
     try:
         assets = trade_client.get_assets()
         portfolio_value = assets[0].segments['S'].equity_with_loan
