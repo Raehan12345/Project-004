@@ -46,7 +46,7 @@ def get_market_regime(benchmark="^STI"):
         return "BULL"
 
 def run_full_screener():
-    TICKER_FILE = "tickers_15.txt"
+    TICKER_FILE = "tickers.txt"
 
     def load_tickers(file):
         if not os.path.exists(file):
