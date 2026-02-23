@@ -25,7 +25,6 @@ def get_intraday_signal(quote_client, ticker):
                 
             change_pct = (current_price - prev_close) / prev_close
             
-            # Fixed Pandas warning by explicitly declaring fill_method
             returns = bars['close'].pct_change(fill_method=None).dropna()
             volatility = returns.std() 
             dynamic_dip_threshold = -2 * volatility 
@@ -48,10 +47,8 @@ def get_intraday_signal(quote_client, ticker):
             else:
                 is_breakout = False
                 
-        except Exception as e:
-            # Fallback notification injected here
-            print(f"[{ticker}] Tiger Live Data Failed ({e}). FALLING BACK TO YAHOO.")
-            
+        except Exception:
+            # Silent fallback to Yahoo Finance
             stock = yf.Ticker(ticker)
             hist = stock.history(period="5d", interval="15m")
             if hist.empty: return "NO_DATA"
@@ -59,7 +56,6 @@ def get_intraday_signal(quote_client, ticker):
             current_price = hist['Close'].iloc[-1]
             prev_close = stock.info.get('previousClose', current_price)
             
-            # Fixed Pandas warning by explicitly declaring fill_method
             returns = hist['Close'].pct_change(fill_method=None).dropna()
             volatility = returns.std() 
             change_pct = (current_price - prev_close) / prev_close

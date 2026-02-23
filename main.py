@@ -40,14 +40,22 @@ def run_trading_floor():
             if quote is None or quote.empty:
                 raise ValueError("Empty Quote")
             latest_price = float(quote['latest_price'].iloc[0])
-        except Exception as e:
-            # Fallback notification injected here
-            print(f"[{ticker}] Tiger Live Data Failed ({e}). FALLING BACK TO YAHOO.")
+        except Exception:
             latest_price = yf.Ticker(ticker).fast_info['last_price']
+            
+        # Dynamically fetch the lot size for the diagnostic check
+        try:
+            contracts = trade_client.get_contracts(tiger_sym, sec_type='STK')
+            if contracts:
+                lot_size = getattr(contracts[0], 'lot_size', 100 if ".SI" in ticker else 1)
+                lot_size = int(lot_size) if lot_size else (100 if ".SI" in ticker else 1)
+            else:
+                lot_size = 100 if ".SI" in ticker else 1
+        except Exception:
+            lot_size = 100 if ".SI" in ticker else 1
         
         target_qty = int((portfolio_value * weights[raw_sym]) / latest_price)
-        if ".SI" in ticker: 
-            target_qty = (target_qty // 100) * 100
+        target_qty = (target_qty // lot_size) * lot_size
         
         actual_qty = get_current_quantity(current_positions, ticker)
         
@@ -68,7 +76,6 @@ def run_trading_floor():
                 print(f"SKIPPING CORE INITIALIZATION: {ticker} is in a 48-hour Earnings Blackout.")
                 continue
                 
-            print(f"INITIALIZING CORE: {ticker} has 0 holdings. Deploying 50% baseline.")
             execute_trade(trade_client, quote_client, account_id, ticker, (weights[raw_sym] * 0.5), actual_qty, signal_type="CORE_INIT")
             continue
             
