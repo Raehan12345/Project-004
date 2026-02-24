@@ -24,7 +24,7 @@ def run_trading_floor():
         weights[sym] = row['TargetWeight']
         ticker_map[sym] = row['Ticker']
     
-    # Phase 3: Diagnostic Health Check
+    # Phase 3: Diagnostic Check
     print("\n--- PORTFOLIO CHECK: Target vs. Actual ---")
     print(f"{'Ticker':<12} | {'Target Qty':<12} | {'Actual Qty':<12} | {'Status'}")
     print("-" * 55)
@@ -43,7 +43,6 @@ def run_trading_floor():
         except Exception:
             latest_price = yf.Ticker(ticker).fast_info['last_price']
             
-        # Dynamically fetch the lot size for the diagnostic check
         try:
             contracts = trade_client.get_contracts(tiger_sym, sec_type='STK')
             if contracts:
@@ -62,7 +61,7 @@ def run_trading_floor():
         status = "MATCH" if actual_qty == target_qty else "MISMATCH"
         print(f"{ticker:<12} | {target_qty:<12} | {actual_qty:<12} | {status}")
 
-    # --- Phase 4: Intraday Scan & Entry/Trim ---
+    # Phase 4: Intraday Scan & Entry/Trim
     print("\n--- Entry & Scaling ---")
     
     current_positions = trade_client.get_positions(account=account_id)
@@ -117,7 +116,7 @@ def run_trading_floor():
             if quantity > 0:
                 print(f"HOLD: {raw_symbol} maintains Model Ranking.")
 
-    print("\n--- CYCLE COMPLETE ---")
+    print("\n CYCLE COMPLETE ")
 
 if __name__ == "__main__":
     run_trading_floor()

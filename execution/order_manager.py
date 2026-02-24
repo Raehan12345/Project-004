@@ -76,7 +76,6 @@ def execute_trade(trade_client, quote_client, account_id, ticker, target_weight,
         except Exception:
             latest_price = yf.Ticker(ticker).fast_info['last_price']
             
-        # Fetch the Contract first to dynamically extract the legal Board Lot size
         contracts = trade_client.get_contracts(tiger_sym, sec_type='STK')
         if not contracts:
             contracts = trade_client.get_contracts(ticker, sec_type='STK')
@@ -89,20 +88,17 @@ def execute_trade(trade_client, quote_client, account_id, ticker, target_weight,
             
         contract = contracts[0]
         
-        # Determine strict Board Lot sizes
         lot_size = getattr(contract, 'lot_size', 1)
         if not lot_size or lot_size <= 0:
             lot_size = 100 if ".SI" in ticker else 1
         lot_size = int(lot_size)
         
         target_qty = int((portfolio_value * target_weight) / latest_price)
-        # Round the target quantity down to the nearest multiple of the board lot
         target_qty = (target_qty // lot_size) * lot_size
 
         needed_qty = target_qty - current_qty
         
         if needed_qty == 0:
-            # Provide feedback if the allocation wasn't large enough to buy a single board lot
             if target_weight > 0 and target_qty == 0:
                 print(f"SKIPPING: {ticker} allocation is too small to afford 1 Board Lot (Lot Size: {lot_size}).")
             return
@@ -110,7 +106,6 @@ def execute_trade(trade_client, quote_client, account_id, ticker, target_weight,
         action = 'BUY' if needed_qty > 0 else 'SELL'
         abs_qty = abs(needed_qty)
 
-        # Enforce Board Lot strict rounding on the delta transmission
         abs_qty = (abs_qty // lot_size) * lot_size
         
         if abs_qty <= 0:

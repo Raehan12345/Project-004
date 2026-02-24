@@ -19,10 +19,10 @@ def get_tiger_client():
     
     trade_client = TradeClient(client_config)
     
-    # Force grab 
+    # force grab 
     quote_client = QuoteClient(client_config, is_grab_permission=True)
     
-    # Manual grab to override
+    # manual grab to override
     try:
         quote_client.grab_quote_permission()
         print(" Market Data Permission Grabbed successfully.")

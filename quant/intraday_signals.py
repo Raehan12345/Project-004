@@ -48,7 +48,7 @@ def get_intraday_signal(quote_client, ticker):
                 is_breakout = False
                 
         except Exception:
-            # Silent fallback to Yahoo Finance
+            # fallback to Yahoo Finance
             stock = yf.Ticker(ticker)
             hist = stock.history(period="5d", interval="15m")
             if hist.empty: return "NO_DATA"
