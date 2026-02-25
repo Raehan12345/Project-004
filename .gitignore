@@ -22,9 +22,12 @@ tiger_private_key.pem
 # Credentials and environment files
 .env
 
+trade_log.csv
+
 #Broker_API_Connection
  execution/broker_api.py
 
  legacy/old_main.py
 
-trade_log.csv
+
+
