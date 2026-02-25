@@ -22,6 +22,8 @@ tiger_private_key.pem
 # Credentials and environment files
 .env
 
+run_trading_floor.bat
+
 trade_log.csv
 
 #Broker_API_Connection

@@ -1,22 +1,21 @@
-# execution/order_manager.py
 import pandas as pd
 import yfinance as yf
 import csv
 import os
 from datetime import datetime
-from tigeropen.common.util.order_utils import market_order, trail_order, limit_order
+from tigeropen.common.util.order_utils import market_order, limit_order
 
-def log_trade(ticker, action, quantity, price, signal_type, trail_pct="N/A"):
+def log_trade(ticker, action, quantity, price, signal_type):
     file_name = "trade_log.csv"
     file_exists = os.path.isfile(file_name)
     
     with open(file_name, mode='a', newline='') as file:
         writer = csv.writer(file)
         if not file_exists:
-            writer.writerow(["Timestamp", "Ticker", "Action", "Quantity", "ExecutionPrice", "SignalType", "TrailingStopPct"])
+            writer.writerow(["Timestamp", "Ticker", "Action", "Quantity", "ExecutionPrice", "SignalType"])
         
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        writer.writerow([timestamp, ticker, action, quantity, price, signal_type, trail_pct])
+        writer.writerow([timestamp, ticker, action, quantity, price, signal_type])
 
 def get_current_quantity(positions, ticker):
     try:
@@ -30,22 +29,6 @@ def get_current_quantity(positions, ticker):
     except Exception as e:
         print(f"Position check failed for {ticker}: {e}")
         return 0
-
-def get_atr(ticker, period=14):
-    try:
-        data = yf.Ticker(ticker).history(period="30d")
-        if len(data) < period: 
-            return None
-            
-        high_low = data['High'] - data['Low']
-        high_close = (data['High'] - data['Close'].shift()).abs()
-        low_close = (data['Low'] - data['Close'].shift()).abs()
-        
-        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-        return tr.rolling(window=period).mean().iloc[-1]
-    except Exception as e:
-        print(f"ATR calculation failed for {ticker}: {e}")
-        return None
 
 def get_hkex_tick_size(price):
     if price <= 0.25: return 0.001
@@ -135,26 +118,8 @@ def execute_trade(trade_client, quote_client, account_id, ticker, target_weight,
             
         trade_client.place_order(primary_order)
         print(f"SUCCESS: {action} order for {abs_qty} shares of {ticker} transmitted.")
-        
-        trail_pct = "N/A"
-        
-        if action == 'BUY':
-            atr = get_atr(ticker)
-            if atr:
-                trail_pct = round(((2 * atr) / latest_price) * 100, 2)
-                trail_pct = min(trail_pct, 20.0)
-                
-                stop_order = trail_order(
-                    account=account_id,
-                    contract=contract,
-                    action='SELL',
-                    quantity=int(abs_qty),
-                    trailing_percent=trail_pct
-                )
-                trade_client.place_order(stop_order)
-                print(f"RISK MANAGEMENT: Server-side trailing stop attached at {trail_pct}% distance.")
 
-        log_trade(ticker, action, int(abs_qty), latest_price, signal_type, trail_pct)
+        log_trade(ticker, action, int(abs_qty), latest_price, signal_type)
 
     except Exception as e:
         print(f"EXECUTION FAILURE for {ticker}: {e}")
