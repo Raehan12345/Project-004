@@ -38,7 +38,7 @@ def calculate_pair_zscore_local(data, asset1, asset2, hedge_ratio):
     except Exception:
         return None
 
-def scan_stat_arb_signals(filepath="cointegrated_pairs.csv", max_entry_pairs=5):
+def scan_stat_arb_signals(filepath="cointegrated_pairs.csv", max_entry_pairs=20):
     """
     Evaluates pairs for long-only relative value entries and exits.
     Returns a list of tickers to buy, and a list of tickers to liquidate.
@@ -72,7 +72,10 @@ def scan_stat_arb_signals(filepath="cointegrated_pairs.csv", max_entry_pairs=5):
         bulk_data = raw_data
 
     print(f"Data acquired. Scanning {len(df)} total pairs for active mean-reversion signals...\n")
-    print("--- LIVE Z-SCORE HEARTBEAT (TOP 5 PAIRS) ---")
+    print("=== LIVE Z-SCORE HEARTBEAT (TOP 20 PAIRS) ===")
+    
+    # Updated aggressiveness parameters
+    ENTRY_THRESHOLD = 1.7
     
     for index, row in df.iterrows():
         a1 = row['Asset_1']
@@ -93,18 +96,18 @@ def scan_stat_arb_signals(filepath="cointegrated_pairs.csv", max_entry_pairs=5):
                 exit_list.append(a2)
                 
             if index < max_entry_pairs:
-                print(f"[{a1} vs {a2}] Current Z-Score: {zscore} | Threshold: +/- 2.0")
-                if zscore <= -2.0:
+                print(f"[{a1} vs {a2}] Current Z-Score: {zscore} | Threshold: +/- {ENTRY_THRESHOLD}")
+                if zscore <= -ENTRY_THRESHOLD:
                     buy_list.append(a1)
                     print(f" >>> SIGNAL TRIGGERED: BUY {a1} (Undervalued)")
-                elif zscore >= 2.0:
+                elif zscore >= ENTRY_THRESHOLD:
                     buy_list.append(a2)
                     print(f" >>> SIGNAL TRIGGERED: BUY {a2} (Undervalued)")
         else:
             if index < max_entry_pairs:
                 print(f"[{a1} vs {a2}] Current Z-Score: DATA UNAVAILABLE")
 
-    print("--------------------------------------------\n")
+    print("=============================================\n")
 
     buy_set = set(buy_list)
     exit_set = set(exit_list)
